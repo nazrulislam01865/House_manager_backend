@@ -53,7 +53,30 @@ export async function createApp() {
   );
   return app;
 }
+async function bootstrap() {
+  try {
+    console.info("[HouseLedger] Starting NestJS", {
+      nodeVersion: process.version,
+      hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+      environment: process.env.NODE_ENV,
+    });
+
+    const app = await createApp();
+
+    console.info("[HouseLedger] NestJS initialized");
+
+    await app.listen(
+      Number(process.env.PORT || 4000),
+      "0.0.0.0",
+    );
+
+    console.info("[HouseLedger] HTTP server ready");
+  } catch (error) {
+    console.error("[HouseLedger] Startup failed:", error);
+    throw error;
+  }
+}
+
 if (process.env.NODE_ENV !== "test") {
-  const app = await createApp();
-  await app.listen(Number(process.env.PORT || 4000), "0.0.0.0");
+  void bootstrap();
 }
