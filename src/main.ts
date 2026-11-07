@@ -3,7 +3,7 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
-import helmet from "helmet";
+import * as helmetModule from "helmet";
 import { randomUUID } from "node:crypto";
 import { types } from "pg";
 import { AppModule, ObserveInstrument } from "./app.module.js";
@@ -20,7 +20,7 @@ export async function createApp() {
   );
   app.enableShutdownHooks();
   app.setGlobalPrefix("api/v1");
-  app.use(helmet());
+  app.use(helmetModule.default());
   app.use(cookieParser());
   app.enableCors({
     origin: (process.env.FRONTEND_ORIGINS || "http://localhost:3000").split(
