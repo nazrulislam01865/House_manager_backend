@@ -1,0 +1,12 @@
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX users_role_idx ON users(organization_id,role,created_at,id);
+CREATE INDEX users_name_search_idx ON users USING gin(name gin_trgm_ops);
+CREATE INDEX users_phone_search_idx ON users USING gin(phone gin_trgm_ops);
+CREATE INDEX houses_name_search_idx ON houses USING gin(name gin_trgm_ops);
+CREATE INDEX rooms_lookup_idx ON rooms(organization_id,house_id,number,id);
+CREATE INDEX rooms_number_search_idx ON rooms USING gin(number gin_trgm_ops);
+ALTER TABLE outbox_events ADD COLUMN attempts integer NOT NULL DEFAULT 0;
+ALTER TABLE outbox_events ADD COLUMN next_attempt_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE outbox_events ADD COLUMN last_error text;
+CREATE INDEX outbox_due_idx ON outbox_events(next_attempt_at,id) WHERE processed_at IS NULL;
+CREATE TABLE processed_events(event_id uuid PRIMARY KEY REFERENCES outbox_events(id),processed_at timestamptz NOT NULL DEFAULT now());
