@@ -3,12 +3,17 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
-import * as helmetModule from "helmet";
+import helmet from "helmet";
 import { randomUUID } from "node:crypto";
 import { types } from "pg";
 import { AppModule, ObserveInstrument } from "./app.module.js";
 import { ErrorFilter } from "./common/error.filter.js";
-import type { Request, Response, NextFunction } from "express";
+import type {
+  Request,
+  Response,
+  NextFunction,
+  RequestHandler,
+} from "express";
 types.setTypeParser(1082, (value) => value);
 export async function createApp() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
@@ -20,7 +25,7 @@ export async function createApp() {
   );
   app.enableShutdownHooks();
   app.setGlobalPrefix("api/v1");
-  app.use(helmetModule.default());
+  app.use((helmet as unknown as () => RequestHandler)());
   app.use(cookieParser());
   app.enableCors({
     origin: (process.env.FRONTEND_ORIGINS || "http://localhost:3000").split(
