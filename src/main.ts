@@ -16,7 +16,7 @@ import type {
 } from "express";
 types.setTypeParser(1082, (value) => value);
 export async function createApp() {
-  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
+  if (!process.env.SUPABASE_URL) throw new Error("DATABASE_URL is required");
   const app = await NestFactory.create(
     AppModule,
     process.env.OBSERVE_APP_KEY && process.env.OBSERVE_APP_SECRET
