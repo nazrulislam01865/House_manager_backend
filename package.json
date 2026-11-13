@@ -64,7 +64,7 @@
     "vitest": "^4.1.2"
   },
   "engines": {
-    "node": ">=22.16"
+    "node": "24.x"
   },
   "allowScripts": {
     "argon2@0.45.2": true
