@@ -3,12 +3,26 @@ import { Pool, type PoolClient, type QueryResultRow } from "pg";
 export type Transaction = PoolClient;
 @Injectable()
 export class Database implements OnModuleDestroy {
-  readonly pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: Number(process.env.DB_POOL_SIZE || 10),
-    statement_timeout: 10000,
-    connectionTimeoutMillis: 5000,
-  });
+ readonly pool: Pool;
+
+  constructor() {
+    const ca = process.env.SUPABASE_DB_CA_CERT;
+
+    if (!ca) {
+      throw new Error("SUPABASE_DB_CA_CERT is required");
+    }
+
+    this.pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: Number(process.env.DB_POOL_SIZE || 2),
+      statement_timeout: 10000,
+      connectionTimeoutMillis: 5000,
+      ssl: {
+        ca: ca.replace(/\\n/g, "\n"),
+        rejectUnauthorized: true,
+      },
+    });
+  }
   async query<T extends QueryResultRow = QueryResultRow>(
     sql: string,
     params: unknown[] = [],
