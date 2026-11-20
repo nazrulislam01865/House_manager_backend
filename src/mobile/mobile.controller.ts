@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { Validate, id, date, month, text, minor } from '../common/validation.js';
 import { MobileGuard } from './mobile.guard.js';
 import { MobileService, type MobileActor } from './mobile.service.js';
+import { MobileRentService } from './mobile-rent.service.js';
 
 type AuthenticatedRequest = Request & { mobileActor: MobileActor };
 const credentials = z.object({ identifier: z.string().trim().min(3).max(100), password: z.string().min(1).max(200) }).strict();
@@ -17,13 +18,14 @@ const reading = z.object({ roomId: id, month, readAt: date, current: z.string().
 const rate = z.object({ houseId: id, effectiveFrom: date, rate: z.string().regex(/^\d{1,8}(\.\d{1,4})?$/) }).strict();
 const replaceMeter = z.object({ serial: text, installedAt: date, baseline: z.string().regex(/^\d{1,10}(\.\d{1,3})?$/) }).strict();
 const payment = z.object({ billId: id, amountMinor: minor, method: z.enum(['Cash','Bank transfer','bKash','Nagad']), receivedAt: date }).strict();
+const rentCollect = z.object({ roomId: id, month, amountMinor: minor, method: z.enum(['Cash','Bank transfer','bKash','Nagad']), receivedAt: date }).strict();
 const rentRun = z.object({ houseId: id, month, dueDay: z.number().int().min(1).max(28) }).strict();
 const profile = z.object({ name: text, phone: z.string().regex(/^01[3-9]\d{8}$/).optional(), email: z.email().max(200).nullable().optional() }).strict();
 const password = z.object({ password: z.string().min(8).max(128) }).strict();
 
 @Controller('mobile')
 export class MobileController {
-  constructor(@Inject(MobileService) private mobile: MobileService) {}
+  constructor(@Inject(MobileService) private mobile: MobileService, @Inject(MobileRentService) private mobileRent: MobileRentService) {}
   @Post('auth/login') login(@Body(new Validate(credentials)) d: z.infer<typeof credentials>, @Req() req: Request) { return this.mobile.login(d.identifier,d.password,req.ip || 'unknown'); }
   @UseGuards(MobileGuard) @Get('auth/me') me(@Req() req: AuthenticatedRequest) { return this.mobile.me(req.mobileActor); }
   @UseGuards(MobileGuard) @Post('auth/logout') logout(@Req() req: AuthenticatedRequest) { return this.mobile.logout(req.mobileActor); }
@@ -38,6 +40,7 @@ export class MobileController {
   @UseGuards(MobileGuard) @Post('residents/:id/end') endResident(@Req() req: AuthenticatedRequest, @Param('id',ParseUUIDPipe) residentId: string, @Body(new Validate(end)) d: z.infer<typeof end>) { return this.mobile.endResident(req.mobileActor,residentId,d); }
   @UseGuards(MobileGuard) @Post('residents/:id/move') moveResident(@Req() req: AuthenticatedRequest, @Param('id',ParseUUIDPipe) residentId: string, @Body(new Validate(move)) d: z.infer<typeof move>) { return this.mobile.moveResident(req.mobileActor,residentId,d); }
   @UseGuards(MobileGuard) @Post('residents/:id/set-password') setPassword(@Req() req: AuthenticatedRequest, @Param('id',ParseUUIDPipe) residentId: string, @Body(new Validate(password)) d: z.infer<typeof password>) { return this.mobile.setResidentPassword(req.mobileActor,residentId,d.password); }
+  @UseGuards(MobileGuard) @Post('rent/collect') collectRent(@Req() req: AuthenticatedRequest, @Body(new Validate(rentCollect)) d: z.infer<typeof rentCollect>, @Headers('idempotency-key') key: string) { return this.mobileRent.collect(req.mobileActor,d,key); }
   @UseGuards(MobileGuard) @Post('rent/generate') generateRent(@Req() req: AuthenticatedRequest, @Body(new Validate(rentRun)) d: z.infer<typeof rentRun>, @Headers('idempotency-key') key: string) { return this.mobile.generateRent(req.mobileActor,d,key); }
   @UseGuards(MobileGuard) @Post('electricity/preview') preview(@Req() req: AuthenticatedRequest, @Body(new Validate(reading)) d: z.infer<typeof reading>) { return this.mobile.previewElectricity(req.mobileActor,d); }
   @UseGuards(MobileGuard) @Post('electricity/issue') issue(@Req() req: AuthenticatedRequest, @Body(new Validate(reading)) d: z.infer<typeof reading>, @Headers('idempotency-key') key: string) { return this.mobile.issueElectricity(req.mobileActor,d,key); }

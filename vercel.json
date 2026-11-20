@@ -1,4 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nestjs"
+  "framework": "nestjs",
+  "crons": [{"path": "/api/v1/mobile/jobs/rent", "schedule": "10 18 * * *"}]
 }

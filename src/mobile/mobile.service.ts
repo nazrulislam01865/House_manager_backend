@@ -132,7 +132,7 @@ export class MobileService {
       WHERE t.room_id=ANY($1::uuid[]) AND NOT t.cancelled
       AND ($2::boolean=false OR u.id=$3)
       ORDER BY t.start_date DESC,u.name`,[roomIds,personal,a.id]);
-    const bills = await this.db.query(`SELECT b.id,b.room_id AS "roomId",b.resident_id AS "residentId",b.type,b.month::text AS month,b.amount_minor::text AS "amountMinor",b.paid_minor::text AS "paidMinor",
+    const bills = await this.db.query(`SELECT b.id,b.room_id AS "roomId",b.resident_id AS "residentId",b.type,b.month::text AS month,b.amount_minor::text AS "amountMinor",b.paid_minor::text AS "paidMinor",b.tenancy_id AS "tenancyId",
       mi.serial AS "meterNumber",pr.reading::text AS "previousReading",cr.reading::text AS "currentReading",bs.rate::text AS "unitRate"
       FROM bills b LEFT JOIN bill_segments bs ON bs.bill_id=b.id
       LEFT JOIN meter_readings pr ON pr.id=bs.previous_reading_id LEFT JOIN meter_readings cr ON cr.id=bs.current_reading_id
