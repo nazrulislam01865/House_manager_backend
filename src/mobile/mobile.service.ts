@@ -9,8 +9,8 @@ import { MeterInstallationsService } from '../properties/meter-installations.ser
 import { PeopleService } from '../people/people.service.js';
 import { TenancyService } from '../people/tenancy.service.js';
 import { BillsService } from '../billing/bills.service.js';
-import { MeteringService } from '../billing/metering.service.js';
 import { CollectionsService } from '../collections/collections.service.js';
+import { MobileElectricityService } from './mobile-electricity.service.js';
 
 export type MobileActor = Actor & { role: 'ADMIN'|'MANAGER'|'RESIDENT'; phone: string };
 const todayDhaka = () => {
@@ -31,8 +31,8 @@ export class MobileService {
     @Inject(PeopleService) private people: PeopleService,
     @Inject(TenancyService) private tenancies: TenancyService,
     @Inject(BillsService) private bills: BillsService,
-    @Inject(MeteringService) private metering: MeteringService,
     @Inject(CollectionsService) private collections: CollectionsService,
+    @Inject(MobileElectricityService) private electricity: MobileElectricityService,
   ) {}
 
   async login(identifier: string, password: string, ip: string) {
@@ -264,11 +264,10 @@ export class MobileService {
     return this.tenancies.move(a,tenancy.tenancyId,d);
   }
   async generateRent(a:MobileActor,d:{houseId:string;month:string;dueDay:number},key:string) {await this.house(a,d.houseId);return this.bills.rentRun(a,d,validKey(key));}
-  async previewElectricity(a:MobileActor,d:{roomId:string;month:string;readAt:string;current:string}) {await this.room(a,d.roomId);return this.metering.preview(a,d);}
+  async previewElectricity(a:MobileActor,d:{roomId:string;month:string;readAt:string;current:string}) {await this.room(a,d.roomId);return this.electricity.preview(a,d);}
   async issueElectricity(a:MobileActor,d:{roomId:string;month:string;readAt:string;current:string},key:string) {
     await this.room(a,d.roomId);
-    const preview=await this.metering.preview(a,d);
-    return this.metering.issue(a,{...d,previousReadingId:preview.previousReadingId,tariffId:preview.tariffId},validKey(key));
+    return this.electricity.issue(a,d,validKey(key));
   }
   async saveRate(a:MobileActor,d:{houseId:string;effectiveFrom:string;rate:string}) {await this.house(a,d.houseId);return this.bills.rate(a,d);}
   async payment(a:MobileActor,d:{billId:string;amountMinor:string;method:'Cash'|'Bank transfer'|'bKash'|'Nagad';receivedAt:string},key:string) {

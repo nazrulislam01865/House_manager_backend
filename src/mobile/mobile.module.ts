@@ -7,15 +7,15 @@ import { MeterInstallationsService } from '../properties/meter-installations.ser
 import { PeopleService } from '../people/people.service.js';
 import { TenancyService } from '../people/tenancy.service.js';
 import { BillsService } from '../billing/bills.service.js';
-import { MeteringService } from '../billing/metering.service.js';
 import { CollectionsService } from '../collections/collections.service.js';
 import { MobileRentService } from './mobile-rent.service.js';
+import { MobileElectricityService } from './mobile-electricity.service.js';
 import { MobileRentCronController } from './mobile-rent-cron.controller.js';
 
 /** Isolated mobile API. No existing admin-web controller or service is modified. */
 @Module({
   controllers: [MobileController, MobileRentCronController],
   providers: [MobileService, MobileGuard, PropertiesService, MeterInstallationsService,
-    PeopleService, TenancyService, BillsService, MeteringService, CollectionsService, MobileRentService],
+    PeopleService, TenancyService, BillsService, CollectionsService, MobileRentService, MobileElectricityService],
 })
 export class MobileModule {}
