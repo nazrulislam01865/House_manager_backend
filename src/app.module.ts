@@ -8,6 +8,7 @@ import { PeopleModule } from "./people/people.module.js";
 import { BillingModule } from "./billing/billing.module.js";
 import { CollectionsModule } from "./collections/collections.module.js";
 import { ReportingModule } from "./reporting/reporting.module.js";
+import { MobileModule } from "./mobile/mobile.module.js";
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 const observe =
   process.env.OBSERVE_APP_KEY && process.env.OBSERVE_APP_SECRET
@@ -30,6 +31,7 @@ const observe =
     BillingModule,
     CollectionsModule,
     ReportingModule,
+    MobileModule,
   ],
 })
 export class AppModule {}

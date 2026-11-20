@@ -65,8 +65,5 @@
   },
   "engines": {
     "node": "24.x"
-  },
-  "allowScripts": {
-    "argon2@0.45.2": true
   }
 }
