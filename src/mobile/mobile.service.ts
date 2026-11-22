@@ -50,8 +50,12 @@ export class MobileService {
     if (!(await verify(account?.password_hash || await this.dummyPassword, password)) || !account?.password_hash)
       throw new UnauthorizedException('Invalid credentials');
     const token = randomBytes(32).toString('hex');
+    // The unique user index makes concurrent sign-ins atomic: the newest
+    // successful login replaces the previous device's token immediately.
     await this.db.query(`INSERT INTO app_sessions(user_id,token_hash,expires_at)
-      VALUES($1,$2,now()+interval '30 days')`, [account.id,digest(token)]);
+      VALUES($1,$2,now()+interval '30 days')
+      ON CONFLICT (user_id) DO UPDATE SET token_hash=EXCLUDED.token_hash,
+        expires_at=EXCLUDED.expires_at,created_at=now()`, [account.id,digest(token)]);
     await this.db.query('DELETE FROM login_attempts WHERE key=$1',[key]);
     return { token, expiresInSeconds: 30*24*60*60, user: { id:account.id,name:account.name,role:account.role } };
   }
@@ -59,7 +63,7 @@ export class MobileService {
     const [u] = await this.db.query(`SELECT u.id,u.name,u.phone,u.role,u.organization_id AS "organizationId",s.id AS "sessionId",s.expires_at AS "expiresAt"
       FROM app_sessions s JOIN users u ON u.id=s.user_id
       WHERE s.token_hash=$1 AND s.expires_at>now() AND u.active`,[digest(token)]);
-    if (!u || !['ADMIN','MANAGER','RESIDENT'].includes(u.role)) throw new UnauthorizedException('Session expired. Sign in again.');
+    if (!u || !['ADMIN','MANAGER','RESIDENT'].includes(u.role)) throw new UnauthorizedException('Your session has ended or another device signed in. Sign in again.');
     return {id:u.id,name:u.name,phone:u.phone,role:u.role,organizationId:u.organizationId,sessionId:u.sessionId,csrfHash:''};
   }
   async me(a:MobileActor) {return {id:a.id,name:a.name,phone:a.phone,role:a.role};}

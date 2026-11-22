@@ -1,13 +1,18 @@
-import { Controller, Post, Get, Patch, Delete, Body, Param, Req, Headers, UseGuards, Inject, ParseUUIDPipe } from '@nestjs/common';
-import type { Request } from 'express';
+import { Controller, Post, Get, Patch, Delete, Body, Param, Req, Headers, UseGuards, Inject, ParseUUIDPipe, Query, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { Validate, id, date, month, text, minor } from '../common/validation.js';
 import { MobileGuard } from './mobile.guard.js';
 import { MobileService, type MobileActor } from './mobile.service.js';
 import { MobileRentService } from './mobile-rent.service.js';
 import { MobileElectricityService } from './mobile-electricity.service.js';
+import { MobileStatementsService } from './mobile-statements.service.js';
+import { monthlyStatementXlsx, managerFullReportXlsx } from './monthly-statement-xlsx.js';
+import { MobileManagerReportService } from './mobile-manager-report.service.js';
 
 type AuthenticatedRequest = Request & { mobileActor: MobileActor };
+const monthlyStatementQuery = z.object({houseId:id,month}).strict();
+const managerReportQuery = z.object({houseId:id.optional(),month}).strict();
 const credentials = z.object({ identifier: z.string().trim().min(3).max(100), password: z.string().min(1).max(200) }).strict();
 const room = z.object({ houseId: id, number: text, rentMinor: minor, meter: z.string().trim().max(80).optional(), initialReading: z.string().regex(/^\d{1,10}(\.\d{1,3})?$/).optional(), installedAt: date.optional() }).strict();
 const editRoom = z.object({ number: text, rentMinor: minor, effectiveMonth: month }).strict();
@@ -27,11 +32,41 @@ const password = z.object({ password: z.string().min(8).max(128) }).strict();
 
 @Controller('mobile')
 export class MobileController {
-  constructor(@Inject(MobileService) private mobile: MobileService, @Inject(MobileRentService) private mobileRent: MobileRentService, @Inject(MobileElectricityService) private mobileElectricity: MobileElectricityService) {}
+  constructor(@Inject(MobileService) private mobile: MobileService, @Inject(MobileRentService) private mobileRent: MobileRentService, @Inject(MobileElectricityService) private mobileElectricity: MobileElectricityService, @Inject(MobileStatementsService) private statements:MobileStatementsService, @Inject(MobileManagerReportService) private managerReports:MobileManagerReportService) {}
   @Post('auth/login') login(@Body(new Validate(credentials)) d: z.infer<typeof credentials>, @Req() req: Request) { return this.mobile.login(d.identifier,d.password,req.ip || 'unknown'); }
   @UseGuards(MobileGuard) @Get('auth/me') me(@Req() req: AuthenticatedRequest) { return this.mobile.me(req.mobileActor); }
   @UseGuards(MobileGuard) @Post('auth/logout') logout(@Req() req: AuthenticatedRequest) { return this.mobile.logout(req.mobileActor); }
   @UseGuards(MobileGuard) @Get('bootstrap') bootstrap(@Req() req: AuthenticatedRequest) { return this.mobile.bootstrap(req.mobileActor); }
+  @UseGuards(MobileGuard) @Get('statements') statement(@Req() req:AuthenticatedRequest,
+    @Query(new Validate(monthlyStatementQuery)) q:z.infer<typeof monthlyStatementQuery>) {
+    return this.statements.monthly(req.mobileActor,q.month,q.houseId);
+  }
+  @UseGuards(MobileGuard) @Get('statements/export') async exportStatement(@Req() req:AuthenticatedRequest,
+    @Query(new Validate(monthlyStatementQuery)) q:z.infer<typeof monthlyStatementQuery>,@Res() res:Response) {
+    const report=await this.statements.monthly(req.mobileActor,q.month,q.houseId);
+    const workbook=monthlyStatementXlsx(report);
+    res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition',`attachment; filename="HouseLedger-${q.month}-statement.xlsx"`);
+    res.setHeader('Cache-Control','private, no-store');
+    res.setHeader('X-Content-Type-Options','nosniff');
+    res.end(workbook);
+  }
+
+  @UseGuards(MobileGuard) @Get('reports/full') fullReport(@Req() req:AuthenticatedRequest,
+    @Query(new Validate(managerReportQuery)) q:z.infer<typeof managerReportQuery>) {
+    return this.managerReports.full(req.mobileActor,q.month,q.houseId);
+  }
+  @UseGuards(MobileGuard) @Get('reports/full/export') async exportFullReport(@Req() req:AuthenticatedRequest,
+    @Query(new Validate(managerReportQuery)) q:z.infer<typeof managerReportQuery>,@Res() res:Response) {
+    const report=await this.managerReports.full(req.mobileActor,q.month,q.houseId);
+    const workbook=managerFullReportXlsx(report);
+    res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition',`attachment; filename="HouseLedger-Manager-Full-Report-${q.month}.xlsx"`);
+    res.setHeader('Cache-Control','private, no-store');
+    res.setHeader('X-Content-Type-Options','nosniff');
+    res.end(workbook);
+  }
+
   @UseGuards(MobileGuard) @Patch('profile') updateProfile(@Req() req: AuthenticatedRequest, @Body(new Validate(profile)) d: z.infer<typeof profile>) { return this.mobile.updateProfile(req.mobileActor,d); }
   @UseGuards(MobileGuard) @Post('rooms') createRoom(@Req() req: AuthenticatedRequest, @Body(new Validate(room)) d: z.infer<typeof room>) { return this.mobile.createRoom(req.mobileActor,d); }
   @UseGuards(MobileGuard) @Patch('rooms/:id') updateRoom(@Req() req: AuthenticatedRequest, @Param('id', ParseUUIDPipe) roomId: string, @Body(new Validate(editRoom)) d: z.infer<typeof editRoom>) { return this.mobile.updateRoom(req.mobileActor,roomId,d); }

@@ -46,7 +46,10 @@ export class AuthService {
       csrf = randomBytes(32).toString("hex");
     if (role === "MANAGER") {
       await this.db.query(
-        "INSERT INTO app_sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '30 days')",
+        `INSERT INTO app_sessions(user_id,token_hash,expires_at)
+         VALUES($1,$2,now()+interval '30 days')
+         ON CONFLICT (user_id) DO UPDATE SET token_hash=EXCLUDED.token_hash,
+           expires_at=EXCLUDED.expires_at,created_at=now()`,
         [user.id, digest(token)],
       );
     } else {
