@@ -38,15 +38,15 @@ function roomSheetXml(sheet:Sheet):string {
     if(typeof value==='number') return `<c r="${ref}" s="${style}"><v>${value}</v></c>`;
     return `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`;
   }
-  const rows=sheet.rows.map((vals,i)=>`<row r="${i+1}"${i===1||i===2||i===3?' ht="27" customHeight="1"':i===0?' ht="35" customHeight="1"':i===5?' ht="40" customHeight="1"':''}>${vals.map((v,j)=>entry(v,i+1,j)).join('')}</row>`).join('');
+  const rows=sheet.rows.map((vals,i)=>`<row r="${i+1}"${i===1||i===2||i===3?' ht="27" customHeight="1"':i===0?' ht="35" customHeight="1"':i===5?' ht="40" customHeight="1"':''}>${vals.map((v,j)=>v===''?'':entry(v,i+1,j)).join('')}</row>`).join('');
   const merges=['A1:K1',...([2,3,4].flatMap(r=>[`A${r}:B${r}`,`C${r}:F${r}`,`G${r}:H${r}`,`I${r}:K${r}`])),`A${totalRow+1}:K${totalRow+1}`,`A${totalRow+2}:K${totalRow+2}`];
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
     `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`+
     `<dimension ref="A1:K${last}"/>`+
-    `<sheetViews><sheetView showGridLines="0" workbookViewId="0"><pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`+
+    `<sheetViews><sheetView showGridLines="0" workbookViewId="0"><pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A7" sqref="A7"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="16"/>`+
     `${cols}<sheetData>${rows}</sheetData>`+
-    `<mergeCells count="${merges.length}">${merges.map(ref=>`<mergeCell ref="${ref}"/>`).join('')}</mergeCells>`+
     (lastDataRow>=7?`<autoFilter ref="A6:K${lastDataRow}"/>`:'')+
+    `<mergeCells count="${merges.length}">${merges.map(ref=>`<mergeCell ref="${ref}"/>`).join('')}</mergeCells>`+
     `<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.55" bottom="0.55" header="0.2" footer="0.2"/>`+
     `<pageSetup orientation="landscape" paperSize="9" fitToWidth="1" fitToHeight="0"/>`+
     `</worksheet>`;
@@ -58,9 +58,9 @@ function sheetXml(sheet:Sheet):string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
     `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`+
     `<dimension ref="A1:${column(maxCols-1)}${Math.max(sheet.rows.length,1)}"/>`+
-    `<sheetViews><sheetView workbookViewId="0">${sheet.name==='Summary'?'':'<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'}</sheetView></sheetViews>${header}`+
-    `<sheetData>${sheet.rows.map((cells,i)=>`<row r="${i+1}">${cells.map((v,j)=>cellXml(v,i+1,j,i===0 || (sheet.name==='Summary' && i===5))).join('')}</row>`).join('')}</sheetData>`+
-    (sheet.name==='Summary'?'':`<autoFilter ref="A1:${column(maxCols-1)}${sheet.rows.length}"/>`)+
+    `<sheetViews><sheetView workbookViewId="0">${sheet.name==='Summary'?'':'<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/>'}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>${header}`+
+    `<sheetData>${sheet.rows.map((cells,i)=>`<row r="${i+1}">${cells.map((v,j)=>v===''?'':cellXml(v,i+1,j,i===0 || (sheet.name==='Summary' && i===5))).join('')}</row>`).join('')}</sheetData>`+
+    (sheet.name==='Summary' || sheet.rows.length<2?'':`<autoFilter ref="A1:${column(maxCols-1)}${sheet.rows.length}"/>`)+
     `</worksheet>`;
 }
 const stylesXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
@@ -116,12 +116,12 @@ function zip(entries:{name:string;data:string}[]):Buffer {
     const crc=crc32(original);
     const lh=Buffer.alloc(30);
     lh.writeUInt32LE(0x04034b50,0);lh.writeUInt16LE(20,4);
-    lh.writeUInt16LE(0x0800,6);lh.writeUInt16LE(8,8);
+    lh.writeUInt16LE(0x0800,6);lh.writeUInt16LE(8,8);lh.writeUInt16LE(0x0021,12);
     lh.writeUInt32LE(crc,14);lh.writeUInt32LE(compressed.length,18);lh.writeUInt32LE(original.length,22);lh.writeUInt16LE(name.length,26);
     local.push(lh,name,compressed);
     const ch=Buffer.alloc(46);
     ch.writeUInt32LE(0x02014b50,0);ch.writeUInt16LE(20,4);ch.writeUInt16LE(20,6);
-    ch.writeUInt16LE(0x0800,8);ch.writeUInt16LE(8,10);ch.writeUInt32LE(crc,16);
+    ch.writeUInt16LE(0x0800,8);ch.writeUInt16LE(8,10);ch.writeUInt16LE(0x0021,14);ch.writeUInt32LE(crc,16);
     ch.writeUInt32LE(compressed.length,20);ch.writeUInt32LE(original.length,24);
     ch.writeUInt16LE(name.length,28);ch.writeUInt32LE(offset,42);
     central.push(ch,name);
@@ -135,14 +135,22 @@ function zip(entries:{name:string;data:string}[]):Buffer {
 }
 
 function packageWorkbook(sheets:Sheet[]):Buffer {
-  const workbook=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s,i)=>`<sheet name="${xml(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`;
+  const workbook=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView windowWidth="18000" windowHeight="9000"/></bookViews><sheets>${sheets.map((s,i)=>`<sheet name="${xml(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`;
   const relationships=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
-  const types=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`;
-  const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  const coreProps=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">`+
+    `<dc:creator>HouseLedger</dc:creator><dc:title>Monthly house report</dc:title></cp:coreProperties>`;
+  const appProps=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">`+
+    `<Application>HouseLedger</Application></Properties>`;
+  const types=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`;
+  const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`;
   return zip([
     {name:'[Content_Types].xml',data:types},{name:'_rels/.rels',data:rootRels},
     {name:'xl/workbook.xml',data:workbook},{name:'xl/_rels/workbook.xml.rels',data:relationships},
     {name:'xl/styles.xml',data:stylesXml},
+    {name:'docProps/core.xml',data:coreProps},
+    {name:'docProps/app.xml',data:appProps},
     ...sheets.map((s,i)=>({name:`xl/worksheets/sheet${i+1}.xml`,data:sheetXml(s)})),
   ]);
 }
