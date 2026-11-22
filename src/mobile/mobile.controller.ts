@@ -44,7 +44,8 @@ export class MobileController {
   @UseGuards(MobileGuard) @Get('statements/export') async exportStatement(@Req() req:AuthenticatedRequest,
     @Query(new Validate(monthlyStatementQuery)) q:z.infer<typeof monthlyStatementQuery>,@Res() res:Response) {
     const report=await this.statements.monthly(req.mobileActor,q.month,q.houseId);
-    const workbook=monthlyStatementXlsx(report);
+    const rooms=await this.managerReports.exportRoomDirectory(req.mobileActor,q.month,[report.house.id]);
+    const workbook=monthlyStatementXlsx(report,rooms,{name:req.mobileActor.name,phone:req.mobileActor.phone});
     res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition',`attachment; filename="HouseLedger-${q.month}-statement.xlsx"`);
     res.setHeader('Cache-Control','private, no-store');
@@ -59,7 +60,8 @@ export class MobileController {
   @UseGuards(MobileGuard) @Get('reports/full/export') async exportFullReport(@Req() req:AuthenticatedRequest,
     @Query(new Validate(managerReportQuery)) q:z.infer<typeof managerReportQuery>,@Res() res:Response) {
     const report=await this.managerReports.full(req.mobileActor,q.month,q.houseId);
-    const workbook=managerFullReportXlsx(report);
+    const rooms=await this.managerReports.exportRoomDirectory(req.mobileActor,q.month,report.houses.map(h=>h.houseId));
+    const workbook=managerFullReportXlsx(report,rooms,{name:req.mobileActor.name,phone:req.mobileActor.phone});
     res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition',`attachment; filename="HouseLedger-Manager-Full-Report-${q.month}.xlsx"`);
     res.setHeader('Cache-Control','private, no-store');

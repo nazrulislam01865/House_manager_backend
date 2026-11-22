@@ -18,10 +18,13 @@ while(buffer.readUInt32LE(i)===0x04034b50){
   entries.set(name,inflateRawSync(buffer.subarray(dataAt,dataAt+size)).toString('utf8'));
   i=dataAt+size;
 }
-assert.equal(entries.size,10);
+assert.equal(entries.size,11);
 assert.match(entries.get('xl/workbook.xml'),/Electricity Bills/);
-assert.match(entries.get('xl/worksheets/sheet2.xml'),/t="inlineStr"[^>]*><is><t xml:space="preserve">=1\+1/);
-assert.doesNotMatch(entries.get('xl/worksheets/sheet2.xml'),/<f>/);
-assert.match(entries.get('xl/worksheets/sheet5.xml'),/HL-123/);
-assert.match(entries.get('xl/worksheets/sheet4.xml'),/>110</);
-console.log('Monthly statement XLSX/ZIP and formula-safe cells: PASS');
+assert.match(entries.get('xl/worksheets/sheet3.xml'),/t="inlineStr"[^>]*><is><t xml:space="preserve">=1\+1/);
+assert.doesNotMatch(entries.get('xl/worksheets/sheet3.xml'),/<f>/);
+assert.match(entries.get('xl/worksheets/sheet6.xml'),/HL-123/);
+assert.match(entries.get('xl/worksheets/sheet5.xml'),/>110</);
+assert.match(entries.get('xl/worksheets/sheet1.xml'),/Name of the room user\/rent/);
+assert.match(entries.get('xl/worksheets/sheet1.xml'),/t="inlineStr"[^>]*><is><t xml:space="preserve">=1\+1/);
+assert.doesNotMatch(entries.get('xl/worksheets/sheet1.xml'),/<f>=1\+1<\/f>/);
+console.log('Monthly statement XLSX/ZIP, room layout and formula-safe text: PASS');

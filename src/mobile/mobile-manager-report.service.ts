@@ -10,11 +10,12 @@ export type ManagerReportReceipt = {
   houseName: string; houseId: string; room: string; resident: string; collectedBy: string;
 };
 export type ManagerHouseReport = {
-  houseId: string; name: string; rooms: number; occupied: number; vacant: number;
+  houseId: string; name: string; address: string; rooms: number; occupied: number; vacant: number;
   rentBilledMinor: string; electricityBilledMinor: string;
   rentPaidMinor: string; electricityPaidMinor: string;
   rentDueMinor: string; electricityDueMinor: string;
 };
+export type RoomDirectoryEntry = {houseId:string;roomId:string;room:string;resident:string|null;phone:string|null;meter:string|null};
 export type ManagerReport = {
   month: string; generatedAt: string; scope: 'all'|'house'; houses: ManagerHouseReport[];
   total: { rooms: number; occupied: number; vacant: number;
@@ -44,9 +45,39 @@ export class MobileManagerReportService {
   constructor(@Inject(Database) private readonly db: Database,
     @Inject(MobileStatementsService) private readonly statements: MobileStatementsService) {}
 
+  /** Export-only room directory. Includes vacant and unbilled rooms, while checking current manager authorization.
+   * Historical tenancy / meter labels are as of the selected billing month, not as of today.
+   */
+  async exportRoomDirectory(actor: MobileActor, month: string, houseIds: string[]): Promise<RoomDirectoryEntry[]> {
+    if (actor.role !== 'MANAGER') throw new ForbiddenException('Manager access required');
+    if (houseIds.length === 0) return [];
+    const rows = await this.db.query(`SELECT r.id AS "roomId",r.house_id AS "houseId",r.number AS room,
+        tenant.name AS resident,tenant.phone AS phone,
+        (SELECT string_agg(DISTINCT mi.serial, ', ' ORDER BY mi.serial)
+          FROM meter_installations mi
+          WHERE mi.room_id=r.id AND mi.installed_at<($3::date + interval '1 month')
+            AND (mi.removed_at IS NULL OR mi.removed_at>$3::date)) AS meter
+      FROM rooms r
+      JOIN houses h ON h.id=r.house_id AND h.organization_id=r.organization_id AND NOT h.archived
+      JOIN manager_assignments ma ON ma.house_id=h.id AND ma.manager_id=$4 AND ma.valid_to IS NULL
+      LEFT JOIN LATERAL (
+        SELECT u.name,u.phone FROM tenancies t
+        JOIN users u ON u.id=t.resident_id AND u.organization_id=r.organization_id
+        WHERE t.room_id=r.id AND NOT t.cancelled
+          AND t.start_date<($3::date + interval '1 month')
+          AND (t.end_date IS NULL OR t.end_date>$3::date)
+        ORDER BY t.start_date DESC,t.id DESC LIMIT 1
+      ) tenant ON TRUE
+      WHERE r.organization_id=$1 AND r.house_id=ANY($2::uuid[])
+      ORDER BY h.name,r.number,r.id`,[actor.organizationId,houseIds,month+'-01',actor.id]);
+    return rows.map(r=>({houseId:String(r.houseId),roomId:String(r.roomId),room:String(r.room),
+      resident:r.resident==null?null:String(r.resident),phone:r.phone==null?null:String(r.phone),
+      meter:r.meter==null?null:String(r.meter)}));
+  }
+
   async full(actor: MobileActor, month: string, houseId?: string): Promise<ManagerReport> {
     if (actor.role !== 'MANAGER') throw new ForbiddenException('Manager access required');
-    const assigned = await this.db.query(`SELECT h.id,h.name FROM houses h
+    const assigned = await this.db.query(`SELECT h.id,h.name,h.address FROM houses h
       JOIN manager_assignments ma ON ma.house_id=h.id AND ma.manager_id=$2 AND ma.valid_to IS NULL
       WHERE h.organization_id=$1 AND NOT h.archived
       ORDER BY h.name,h.id`,[actor.organizationId,actor.id]);
@@ -167,7 +198,7 @@ export class MobileManagerReportService {
       const s=summaryByHouse.get(h.id)!;
       const o=occupancies.get(h.id);
       const rooms=Number(o?.rooms ?? 0), occupied=Number(o?.occupied ?? 0);
-      return {houseId:String(h.id),name:String(h.name),rooms,occupied,vacant:rooms-occupied,
+      return {houseId:String(h.id),name:String(h.name),address:String(h.address),rooms,occupied,vacant:rooms-occupied,
         rentBilledMinor:s.rent.billedMinor,electricityBilledMinor:s.electricity.billedMinor,
         rentPaidMinor:s.rent.collectedMinor,electricityPaidMinor:s.electricity.collectedMinor,
         rentDueMinor:s.rent.remainingMinor,electricityDueMinor:s.electricity.remainingMinor};

@@ -26,11 +26,14 @@ while(i+30<=bytes.length && bytes.readUInt32LE(i)===0x04034b50){
   entries.set(name,inflateRawSync(bytes.subarray(position,position+size)).toString('utf8'));
   i=position+size;
 }
-assert.equal(entries.size,14); // 5 metadata + 9 worksheets
+assert.equal(entries.size,15); // 5 metadata + 10 worksheets
 assert.match(entries.get('xl/workbook.xml'),/Outstanding Dues/);
 assert.match(entries.get('xl/workbook.xml'),/Electricity Meters/);
-assert.match(entries.get('xl/worksheets/sheet3.xml'),/HYPERLINK/);
-assert.doesNotMatch(entries.get('xl/worksheets/sheet3.xml'),/<f>/);
-assert.match(entries.get('xl/worksheets/sheet5.xml'),/HL-42/);
-assert.match(entries.get('xl/worksheets/sheet1.xml'),/Net profit/);
-console.log('Full manager report: 9 sheets, values and formula-safe cells PASS');
+assert.match(entries.get('xl/worksheets/sheet4.xml'),/HYPERLINK/);
+assert.doesNotMatch(entries.get('xl/worksheets/sheet4.xml'),/<f>/);
+assert.match(entries.get('xl/worksheets/sheet6.xml'),/HL-42/);
+assert.match(entries.get('xl/worksheets/sheet2.xml'),/Net profit/);
+assert.match(entries.get('xl/worksheets/sheet1.xml'),/Name of the room user\/rent/);
+assert.match(entries.get('xl/worksheets/sheet1.xml'),/t="inlineStr"[^>]*><is><t xml:space="preserve">=HYPERLINK/);
+assert.doesNotMatch(entries.get('xl/worksheets/sheet1.xml'),/<f>=HYPERLINK/);
+console.log('Full manager report: room sheet plus 9 details sheets and formula-safe text PASS');

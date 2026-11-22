@@ -13,7 +13,7 @@ export type MeterSegment = {meter: string|null; previous: string|null; current: 
 export type StatementPayment = {id:string; receipt:string; kind:string; method:string; date:string; amountMinor:string; collectedBy:string};
 export type StatementSummary = {count:number; billedMinor:string; collectedMinor:string; remainingMinor:string};
 export type MonthlyStatement = {
-  month:string; house:{id:string;name:string};
+  month:string; house:{id:string;name:string;address:string};
   summary:{rent:StatementSummary; electricity:StatementSummary}; bills:StatementLine[];
 };
 
@@ -27,7 +27,7 @@ export class MobileStatementsService {
     if (actor.role!=='MANAGER') throw new ForbiddenException('Manager access required');
     // Authorization is performed on every request and is scoped to the current
     // manager assignment. Never accept a client-supplied organization or owner.
-    const [house] = await this.db.query(`SELECT h.id,h.name FROM houses h
+    const [house] = await this.db.query(`SELECT h.id,h.name,h.address FROM houses h
       JOIN manager_assignments ma ON ma.house_id=h.id AND ma.manager_id=$3 AND ma.valid_to IS NULL
       WHERE h.id=$1 AND h.organization_id=$2 AND NOT h.archived LIMIT 1`,
       [houseId, actor.organizationId, actor.id]);
@@ -91,6 +91,6 @@ export class MobileStatementsService {
         segments:row.segments as MeterSegment[],payments:byBill.get(String(row.id))??[],
       };
     });
-    return {month,house:{id:house.id,name:house.name},summary,bills};
+    return {month,house:{id:house.id,name:house.name,address:house.address},summary,bills};
   }
 }
