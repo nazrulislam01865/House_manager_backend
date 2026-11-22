@@ -3,6 +3,7 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
+import { json, urlencoded } from "express";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import helmet from "helmet";
 import { randomUUID } from "node:crypto";
@@ -17,10 +18,12 @@ export async function createApp() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
   const app = await NestFactory.create(
     AppModule,
-    process.env.OBSERVE_APP_KEY && process.env.OBSERVE_APP_SECRET
-      ? { instrument: ObserveInstrument }
-      : {},
+    { ...(process.env.OBSERVE_APP_KEY && process.env.OBSERVE_APP_SECRET ? { instrument: ObserveInstrument } : {}), bodyParser:false },
   );
+  // Compressed private profile images are base64 in mobile-only JSON (<= 1.5 MB raw).
+  // Keep this within the Vercel request body limit.
+  app.use(json({limit:"3mb"}));
+  app.use(urlencoded({extended:false,limit:"3mb"}));
   if (!process.env.VERCEL) app.enableShutdownHooks();
   app.setGlobalPrefix("api/v1");
   app.use((helmet as unknown as () => RequestHandler)());

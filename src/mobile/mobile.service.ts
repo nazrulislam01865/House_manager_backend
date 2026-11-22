@@ -66,7 +66,12 @@ export class MobileService {
     if (!u || !['ADMIN','MANAGER','RESIDENT'].includes(u.role)) throw new UnauthorizedException('Your session has ended or another device signed in. Sign in again.');
     return {id:u.id,name:u.name,phone:u.phone,role:u.role,organizationId:u.organizationId,sessionId:u.sessionId,csrfHash:''};
   }
-  async me(a:MobileActor) {return {id:a.id,name:a.name,phone:a.phone,role:a.role};}
+  async me(a:MobileActor) {
+    const [p]=await this.db.query(`SELECT (profile_image_path IS NOT NULL) AS "hasProfileImage",
+      profile_image_updated_at::text AS "profileImageVersion" FROM mobile_profile_details WHERE user_id=$1`,[a.id]);
+    return {id:a.id,name:a.name,phone:a.phone,role:a.role,
+      hasProfileImage:p?.hasProfileImage===true,profileImageVersion:p?.profileImageVersion??null};
+  }
   async logout(a:MobileActor) {await this.db.query('DELETE FROM app_sessions WHERE id=$1',[a.sessionId]);return {ok:true};}
   private manager(a:MobileActor) {if(a.role!=='MANAGER') throw new ForbiddenException('Manager access required');}
   private async house(a:MobileActor, houseId:string) {
@@ -128,11 +133,12 @@ export class MobileService {
       LEFT JOIN LATERAL(SELECT amount_minor FROM rent_terms rt WHERE rt.tenancy_id=t.id AND rt.effective_from<=(now() AT TIME ZONE 'Asia/Dhaka')::date AND (rt.effective_to IS NULL OR rt.effective_to>(now() AT TIME ZONE 'Asia/Dhaka')::date) ORDER BY rt.effective_from DESC LIMIT 1)rt ON TRUE
       WHERE r.house_id=ANY($1::uuid[]) AND ($2::boolean=false OR EXISTS(SELECT 1 FROM tenancies history WHERE history.room_id=r.id AND history.resident_id=$3 AND NOT history.cancelled)) ORDER BY r.number,r.id`,[ids,personal,a.id]);
     const roomIds = rooms.map(r=>r.id as string);
-    const residents = await this.db.query(`SELECT u.id,u.name,u.phone,t.start_date::text AS "moveInDate",t.room_id AS "roomId",rt.amount_minor::text AS "rentMinor",u.active,mp.email
+    const residents = await this.db.query(`SELECT u.id,u.name,u.phone,t.start_date::text AS "moveInDate",t.room_id AS "roomId",rt.amount_minor::text AS "rentMinor",u.active,COALESCE(pd.email,mp.email) AS email,(pd.profile_image_path IS NOT NULL) AS "hasProfileImage",pd.profile_image_updated_at::text AS "profileImageVersion"
       FROM tenancies t JOIN users u ON u.id=t.resident_id
       JOIN rooms r ON r.id=t.room_id
       LEFT JOIN LATERAL(SELECT amount_minor FROM rent_terms rt WHERE rt.tenancy_id=t.id ORDER BY rt.effective_from DESC LIMIT 1)rt ON TRUE
       LEFT JOIN mobile_resident_profiles mp ON mp.user_id=u.id
+      LEFT JOIN mobile_profile_details pd ON pd.user_id=u.id
       WHERE t.room_id=ANY($1::uuid[]) AND NOT t.cancelled
       AND ($2::boolean=false OR u.id=$3)
       ORDER BY t.start_date DESC,u.name`,[roomIds,personal,a.id]);

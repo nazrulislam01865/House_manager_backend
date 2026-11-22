@@ -13,11 +13,12 @@ import { MobileElectricityService } from './mobile-electricity.service.js';
 import { MobileRentCronController } from './mobile-rent-cron.controller.js';
 import { MobileStatementsService } from './mobile-statements.service.js';
 import { MobileManagerReportService } from './mobile-manager-report.service.js';
+import { MobileProfilesService } from './mobile-profiles.service.js';
 
 /** Isolated mobile API. No existing admin-web controller or service is modified. */
 @Module({
   controllers: [MobileController, MobileRentCronController],
   providers: [MobileService, MobileGuard, PropertiesService, MeterInstallationsService,
-    PeopleService, TenancyService, BillsService, CollectionsService, MobileRentService, MobileElectricityService, MobileStatementsService, MobileManagerReportService],
+    PeopleService, TenancyService, BillsService, CollectionsService, MobileRentService, MobileElectricityService, MobileStatementsService, MobileManagerReportService, MobileProfilesService],
 })
 export class MobileModule {}

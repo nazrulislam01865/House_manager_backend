@@ -9,6 +9,7 @@ import { MobileElectricityService } from './mobile-electricity.service.js';
 import { MobileStatementsService } from './mobile-statements.service.js';
 import { monthlyStatementXlsx, managerFullReportXlsx } from './monthly-statement-xlsx.js';
 import { MobileManagerReportService } from './mobile-manager-report.service.js';
+import { MobileProfilesService } from './mobile-profiles.service.js';
 
 type AuthenticatedRequest = Request & { mobileActor: MobileActor };
 const monthlyStatementQuery = z.object({houseId:id,month}).strict();
@@ -27,12 +28,23 @@ const replaceMeter = z.object({ serial: text, installedAt: date, baseline: z.str
 const payment = z.object({ billId: id, amountMinor: minor, method: z.enum(['Cash','Bank transfer','bKash','Nagad']), receivedAt: date }).strict();
 const rentCollect = z.object({ roomId: id, month, amountMinor: minor, method: z.enum(['Cash','Bank transfer','bKash','Nagad']), receivedAt: date }).strict();
 const rentRun = z.object({ houseId: id, month, dueDay: z.number().int().min(1).max(28) }).strict();
-const profile = z.object({ name: text, phone: z.string().regex(/^01[3-9]\d{8}$/).optional(), email: z.email().max(200).nullable().optional() }).strict();
+const profile = z.object({
+  name:z.string().trim().min(2).max(150),
+  phone:z.string().regex(/^01[3-9]\d{8}$/).optional(),
+  email:z.email().max(200).nullable().optional(),
+  nid:z.string().regex(/^(\d{10}|\d{13}|\d{17})$/).nullable().optional(),
+  presentAddress:z.string().trim().max(500).nullable().optional(),
+  permanentAddress:z.string().trim().max(500).nullable().optional(),
+  emergencyContact:z.string().trim().max(40).nullable().optional(),
+  occupation:z.string().trim().max(120).nullable().optional(),
+}).strict();
+const profileImage = z.object({base64:z.string().max(2100000).min(8)}).strict();
+const kind = z.enum(['avatar','nid']);
 const password = z.object({ password: z.string().min(8).max(128) }).strict();
 
 @Controller('mobile')
 export class MobileController {
-  constructor(@Inject(MobileService) private mobile: MobileService, @Inject(MobileRentService) private mobileRent: MobileRentService, @Inject(MobileElectricityService) private mobileElectricity: MobileElectricityService, @Inject(MobileStatementsService) private statements:MobileStatementsService, @Inject(MobileManagerReportService) private managerReports:MobileManagerReportService) {}
+  constructor(@Inject(MobileService) private mobile: MobileService, @Inject(MobileRentService) private mobileRent: MobileRentService, @Inject(MobileElectricityService) private mobileElectricity: MobileElectricityService, @Inject(MobileStatementsService) private statements:MobileStatementsService, @Inject(MobileManagerReportService) private managerReports:MobileManagerReportService, @Inject(MobileProfilesService) private profiles: MobileProfilesService) {}
   @Post('auth/login') login(@Body(new Validate(credentials)) d: z.infer<typeof credentials>, @Req() req: Request) { return this.mobile.login(d.identifier,d.password,req.ip || 'unknown'); }
   @UseGuards(MobileGuard) @Get('auth/me') me(@Req() req: AuthenticatedRequest) { return this.mobile.me(req.mobileActor); }
   @UseGuards(MobileGuard) @Post('auth/logout') logout(@Req() req: AuthenticatedRequest) { return this.mobile.logout(req.mobileActor); }
@@ -69,7 +81,16 @@ export class MobileController {
     res.end(workbook);
   }
 
-  @UseGuards(MobileGuard) @Patch('profile') updateProfile(@Req() req: AuthenticatedRequest, @Body(new Validate(profile)) d: z.infer<typeof profile>) { return this.mobile.updateProfile(req.mobileActor,d); }
+  @UseGuards(MobileGuard) @Get('profile') myProfile(@Req() req:AuthenticatedRequest) {return this.profiles.get(req.mobileActor);}
+  @UseGuards(MobileGuard) @Patch('profile') updateProfile(@Req() req:AuthenticatedRequest,@Body(new Validate(profile)) data:z.infer<typeof profile>) {return this.profiles.update(req.mobileActor,data);}
+  @UseGuards(MobileGuard) @Get('residents/:id/profile') residentProfile(@Req() req:AuthenticatedRequest,@Param('id',ParseUUIDPipe) userId:string) {return this.profiles.get(req.mobileActor,userId);}
+  @UseGuards(MobileGuard) @Patch('residents/:id/profile') updateResidentProfile(@Req() req:AuthenticatedRequest,@Param('id',ParseUUIDPipe) userId:string,@Body(new Validate(profile)) data:z.infer<typeof profile>) {return this.profiles.update(req.mobileActor,data,userId);}
+  @UseGuards(MobileGuard) @Post('profile/images/:kind') myImage(@Req() req:AuthenticatedRequest,@Param('kind',new Validate(kind)) mediaKind:'avatar'|'nid',@Body(new Validate(profileImage)) body:z.infer<typeof profileImage>) {return this.profiles.upload(req.mobileActor,req.mobileActor.id,mediaKind,body.base64);}
+  @UseGuards(MobileGuard) @Post('residents/:id/profile/images/:kind') residentImage(@Req() req:AuthenticatedRequest,@Param('id',ParseUUIDPipe) userId:string,@Param('kind',new Validate(kind)) mediaKind:'avatar'|'nid',@Body(new Validate(profileImage)) body:z.infer<typeof profileImage>) {return this.profiles.upload(req.mobileActor,userId,mediaKind,body.base64);}
+  @UseGuards(MobileGuard) @Get('profile/images/:kind') async readMyImage(@Req() req:AuthenticatedRequest,@Param('kind',new Validate(kind)) mediaKind:'avatar'|'nid',@Res() res:Response) {const file=await this.profiles.download(req.mobileActor,req.mobileActor.id,mediaKind);res.setHeader('Content-Type',file.mime);res.setHeader('Cache-Control','private, no-store');res.setHeader('X-Content-Type-Options','nosniff');res.end(file.bytes);}
+  @UseGuards(MobileGuard) @Get('residents/:id/profile/images/:kind') async readResidentImage(@Req() req:AuthenticatedRequest,@Param('id',ParseUUIDPipe) userId:string,@Param('kind',new Validate(kind)) mediaKind:'avatar'|'nid',@Res() res:Response) {const file=await this.profiles.download(req.mobileActor,userId,mediaKind);res.setHeader('Content-Type',file.mime);res.setHeader('Cache-Control','private, no-store');res.setHeader('X-Content-Type-Options','nosniff');res.end(file.bytes);}
+  @UseGuards(MobileGuard) @Delete('profile/images/:kind') removeMyImage(@Req() req:AuthenticatedRequest,@Param('kind',new Validate(kind)) mediaKind:'avatar'|'nid') {return this.profiles.remove(req.mobileActor,req.mobileActor.id,mediaKind);}
+  @UseGuards(MobileGuard) @Delete('residents/:id/profile/images/:kind') removeResidentImage(@Req() req:AuthenticatedRequest,@Param('id',ParseUUIDPipe) userId:string,@Param('kind',new Validate(kind)) mediaKind:'avatar'|'nid') {return this.profiles.remove(req.mobileActor,userId,mediaKind);}
   @UseGuards(MobileGuard) @Post('rooms') createRoom(@Req() req: AuthenticatedRequest, @Body(new Validate(room)) d: z.infer<typeof room>) { return this.mobile.createRoom(req.mobileActor,d); }
   @UseGuards(MobileGuard) @Patch('rooms/:id') updateRoom(@Req() req: AuthenticatedRequest, @Param('id', ParseUUIDPipe) roomId: string, @Body(new Validate(editRoom)) d: z.infer<typeof editRoom>) { return this.mobile.updateRoom(req.mobileActor,roomId,d); }
   @UseGuards(MobileGuard) @Delete('rooms/:id') removeRoom(@Req() req: AuthenticatedRequest, @Param('id',ParseUUIDPipe) roomId: string) { return this.mobile.removeRoom(req.mobileActor,roomId); }
